@@ -1,0 +1,26 @@
+product_block:
+  - "div.s-result-item[data-asin]:not([data-asin=''])"
+
+title:
+  - "h2.a-size-base-plus.a-spacing-none.a-color-base.a-text-normal span"
+
+price:
+  - "span.a-price span.a-offscreen"
+
+rating:
+  - "span.a-icon-alt"
+
+reviews:
+  - "a.a-link-normal.s-underline-text.s-link-style"
+
+link:
+  - "a.a-link-normal.s-line-clamp-4.s-link-style.a-text-normal"
+
+image_url:
+  - "img.s-image"
+
+delivery:
+  - "div[data-cy='delivery-block'] span.a-text-bold"
+
+badge:
+  - "span.puis-label-popover-default span.a-color-secondary"
