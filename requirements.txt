@@ -1,0 +1,4 @@
+playwright
+loguru
+pydantic
+pyyaml
