@@ -1,0 +1,326 @@
+
+# ===== Arquivo: D:\Users\Vinicius\PycharmProjects\PythonProject\amazon_scraper\main.py =====
+
+# amazon_scraper/main.py
+
+import asyncio
+from scraper import AmazonScraper
+from loguru import logger
+
+async def main():
+    query = "ssd"
+    scraper = AmazonScraper()
+    products = await scraper.scrape(query)
+
+    for product in products:
+        logger.info(product.model_dump())
+
+    await scraper.close()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
+# ===== Fim do arquivo: D:\Users\Vinicius\PycharmProjects\PythonProject\amazon_scraper\main.py =====
+
+
+
+---
+
+
+# ===== Arquivo: D:\Users\Vinicius\PycharmProjects\PythonProject\amazon_scraper\model.py =====
+
+# amazon_scraper/model.py
+
+from pydantic import BaseModel
+
+class Product(BaseModel):
+    title: str
+    price: str | None = None
+    rating: str | None = None
+    reviews: str | None = None
+    link: str | None = None
+    image_url: str | None = None
+    delivery: str | None = None
+    badge: str | None = None
+    asin: str | None = None
+
+# ===== Fim do arquivo: D:\Users\Vinicius\PycharmProjects\PythonProject\amazon_scraper\model.py =====
+
+
+
+---
+
+
+# ===== Arquivo: D:\Users\Vinicius\PycharmProjects\PythonProject\amazon_scraper\scraper.py =====
+
+# amazon_scraper/scraper.py
+
+import json
+import os
+from datetime import datetime
+from typing import Optional
+
+from loguru import logger
+from playwright.async_api import async_playwright, Browser, Page
+
+from model import Product
+from selector_loader import SelectorLoader
+from utils import async_retry
+
+class AmazonScraper:
+    def __init__(self):
+        self.playwright = None
+        self.browser: Optional[Browser] = None
+        self.page: Optional[Page] = None
+        self.selectors = SelectorLoader.load_selectors()
+
+    async def init_browser(self):
+        self.playwright = await async_playwright().start()
+        self.browser = await self.playwright.chromium.launch(headless=False)
+        self.page = await self.browser.new_page()
+
+    async def close(self):
+        if self.browser:
+            await self.browser.close()
+        if self.playwright:
+            await self.playwright.stop()
+
+    @async_retry(retries=3, delay=2)
+    async def scrape(self, query: str) -> list[Product]:
+        if not self.browser:
+            await self.init_browser()
+
+        search_url = f"https://www.amazon.com.br/s?k={query}"
+        logger.info(f"Navigating to {search_url}")
+        await self.page.goto(search_url, timeout=60000)
+
+        # Gera timestamp único
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+        # Cria pasta para a execução
+        output_dir = os.path.join("output", f"{query}_{timestamp}")
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Screenshot
+        screenshot_path = os.path.join(output_dir, "screenshot.png")
+        await self.page.screenshot(path=screenshot_path, full_page=True)
+        logger.info(f"Saved screenshot to {screenshot_path}")
+
+        # HTML da página
+        html_content = await self.page.content()
+        html_file_path = os.path.join(output_dir, "page_source.html")
+        with open(html_file_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+        logger.info(f"Saved page HTML to {html_file_path}")
+
+        # Espera produtos renderizarem
+        await self.page.wait_for_function(
+            """() => document.querySelectorAll("div.s-result-item[data-asin]:not([data-asin=''])").length > 20""",
+            timeout=30000
+        )
+
+        products = []
+        product_elements = await self.page.query_selector_all(self.selectors['product_block'][0])
+
+        for element in product_elements:
+            title = await self.extract_text(element, self.selectors['title'])
+            price = await self.extract_text(element, self.selectors['price'])
+            rating = await self.extract_text(element, self.selectors['rating'])
+            reviews = await self.extract_text(element, self.selectors['reviews'])
+
+            link_element = await element.query_selector(self.selectors['link'][0])
+            image_element = await element.query_selector(self.selectors['image_url'][0])
+            delivery = await self.extract_text(element, self.selectors['delivery'])
+            badge = await self.extract_text(element, self.selectors['badge'])
+
+            link = await link_element.get_attribute('href') if link_element else None
+            image_url = await image_element.get_attribute('src') if image_element else None
+            asin = await element.get_attribute('data-asin')
+
+            if title:
+                products.append(Product(
+                    title=title,
+                    price=price,
+                    rating=rating,
+                    reviews=reviews,
+                    link=link,
+                    image_url=image_url,
+                    delivery=delivery,
+                    badge=badge,
+                    asin=asin
+                ))
+
+        logger.info(f"Scraped {len(products)} products.")
+
+        if products:
+            products_file = os.path.join(output_dir, "products.json")
+            with open(products_file, "w", encoding="utf-8") as f:
+                json.dump([product.model_dump() for product in products], f, ensure_ascii=False, indent=2)
+            logger.info(f"Saved products to {products_file}")
+
+        return products
+
+    @staticmethod
+    async def extract_text(element, selectors: list[str]) -> str | None:
+        for selector in selectors:
+            try:
+                sub_element = await element.query_selector(selector)
+                if sub_element:
+                    # Primeiro tenta pegar inner_text (ideal para <span>, <div> etc.)
+                    text = await sub_element.inner_text()
+                    if text:
+                        return text.strip()
+                    # Se inner_text vazio, tenta pegar diretamente o atributo 'textContent'
+                    text_content = await sub_element.get_attribute("textContent")
+                    if text_content:
+                        return text_content.strip()
+            except Exception as e:
+                logger.warning(f"Failed to extract with selector {selector}: {e}")
+        return None
+
+
+# ===== Fim do arquivo: D:\Users\Vinicius\PycharmProjects\PythonProject\amazon_scraper\scraper.py =====
+
+
+
+---
+
+
+# ===== Arquivo: D:\Users\Vinicius\PycharmProjects\PythonProject\amazon_scraper\selector_loader.py =====
+
+# amazon_scraper/selector_loader.py
+
+import yaml
+import os
+
+class SelectorLoader:
+    @staticmethod
+    def load_selectors(path: str = "selectors/selectors_amazon.yml") -> dict:
+        full_path = os.path.join(os.path.dirname(__file__), path)
+        with open(full_path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+
+# ===== Fim do arquivo: D:\Users\Vinicius\PycharmProjects\PythonProject\amazon_scraper\selector_loader.py =====
+
+
+
+---
+
+
+# ===== Arquivo: D:\Users\Vinicius\PycharmProjects\PythonProject\amazon_scraper\settings.py =====
+
+# amazon_scraper/settings.py
+
+AMAZON_URL = "https://www.amazon.com.br"
+DEFAULT_QUERY = "ssd"
+SELECTOR_FILE = "selectors_amazon.yml"
+
+# ===== Fim do arquivo: D:\Users\Vinicius\PycharmProjects\PythonProject\amazon_scraper\settings.py =====
+
+
+
+---
+
+
+# ===== Arquivo: D:\Users\Vinicius\PycharmProjects\PythonProject\amazon_scraper\utils.py =====
+
+# amazon_scraper/utils.py
+
+import asyncio
+from functools import wraps
+
+def async_retry(retries=3, delay=1):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            for attempt in range(retries):
+                try:
+                    return await func(*args, **kwargs)
+                except Exception as e:
+                    if attempt == retries - 1:
+                        raise e
+                    await asyncio.sleep(delay)
+        return wrapper
+    return decorator
+
+# ===== Fim do arquivo: D:\Users\Vinicius\PycharmProjects\PythonProject\amazon_scraper\utils.py =====
+
+
+
+---
+
+
+# ===== Arquivo: D:\Users\Vinicius\PycharmProjects\PythonProject\amazon_scraper\api\scraper_api.py =====
+
+from fastapi import FastAPI, Query, HTTPException
+from scraper import AmazonScraper
+from model import Product
+from typing import List
+from loguru import logger
+import asyncio
+
+app = FastAPI(title="Amazon Scraper API", version="1.0.0")
+
+scraper = AmazonScraper()
+
+@app.on_event("startup")
+async def startup_event():
+    logger.info("Starting browser instance...")
+    await scraper.init_browser()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("Closing browser instance...")
+    await scraper.close()
+
+@app.get("/scrape", response_model=List[Product])
+async def scrape_products(query: str = Query(..., description="Search keyword for Amazon scraping")):
+    try:
+        products = await scraper.scrape(query)
+        return products
+    except Exception as e:
+        logger.error(f"Scraping failed: {e}")
+        raise HTTPException(status_code=500, detail="Scraping failed. Check logs for more details.")
+
+# ===== Fim do arquivo: D:\Users\Vinicius\PycharmProjects\PythonProject\amazon_scraper\api\scraper_api.py =====
+
+
+
+---
+
+
+# ===== Arquivo: D:\Users\Vinicius\PycharmProjects\PythonProject\amazon_scraper\selectors\selectors_amazon.yml =====
+
+product_block:
+  - "div.s-result-item[data-asin]:not([data-asin=''])"
+
+title:
+  - "h2.a-size-base-plus.a-spacing-none.a-color-base.a-text-normal span"
+
+price:
+  - "span.a-price span.a-offscreen"
+
+rating:
+  - "span.a-icon-alt"
+
+reviews:
+  - "a.a-link-normal.s-underline-text.s-link-style"
+
+link:
+  - "a.a-link-normal.s-line-clamp-4.s-link-style.a-text-normal"
+
+image_url:
+  - "img.s-image"
+
+delivery:
+  - "div[data-cy='delivery-block'] span.a-text-bold"
+
+badge:
+  - "span.puis-label-popover-default span.a-color-secondary"
+
+# ===== Fim do arquivo: D:\Users\Vinicius\PycharmProjects\PythonProject\amazon_scraper\selectors\selectors_amazon.yml =====
+
+
+
+---
+
