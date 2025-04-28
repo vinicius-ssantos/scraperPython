@@ -2,4 +2,4 @@
 
 # Torna classes importantes fáceis de importar se quiser no futuro
 from .scraper import AmazonScraper
-from .model import Product
+from amazon_scraper.models.product import Product

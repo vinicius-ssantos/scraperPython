@@ -1,4 +1,4 @@
-# amazon_scraper/model.py
+# amazon_scraper/product.py
 
 from pydantic import BaseModel
 
