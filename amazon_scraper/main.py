@@ -1,22 +1,23 @@
-# amazon_scraper/main.py
-
 import asyncio
-from amazon_scraper import AmazonScraper
-from amazon_scraper.selectors.selector_loader import SelectorLoader
+from amazon_scraper.core.browser_manager import BrowserManager
+from amazon_scraper.services.scraper_service import AmazonScraperService
+from amazon_scraper.scraper_selectors.selector_loader import SelectorLoader
 from loguru import logger
 
 async def main():
     selectors = SelectorLoader.load_selectors()
-    query = selectors.get("query", "ssd")  # busca a palavra-chave, fallback para "ssd"
+    browser_manager = BrowserManager()
 
-    scraper = AmazonScraper()
-    await scraper.init_browser()
-    products = await scraper.scrape(query)
+    await browser_manager.start(headless=False)
+    scraper_service = AmazonScraperService(browser_manager, selectors)
+
+    query = selectors.get("query", "ssd")
+    products = await scraper_service.scrape(query)
 
     for product in products:
         logger.info(product.model_dump())
 
-    await scraper.close()
+    await browser_manager.close()
 
 if __name__ == "__main__":
     asyncio.run(main())

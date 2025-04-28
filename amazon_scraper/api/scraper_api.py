@@ -1,4 +1,5 @@
 # amazon_scraper/api/scraper_api.py
+
 from fastapi import FastAPI
 from amazon_scraper.api.router import router
 

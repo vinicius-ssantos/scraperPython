@@ -1,7 +1,7 @@
 import asyncio
 from amazon_scraper.services.scraper_service import ScraperService
 from amazon_scraper.core.browser_manager import BrowserManager
-from amazon_scraper.selectors.selector_loader import SelectorLoader
+from amazon_scraper.scraper_selectors.selector_loader import SelectorLoader
 
 async def run_cli():
     selectors = SelectorLoader.load_selectors()
