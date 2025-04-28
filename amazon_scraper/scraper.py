@@ -9,8 +9,9 @@ from loguru import logger
 
 from amazon_scraper.models.product import Product
 from amazon_scraper.utils.selector_loader import SelectorLoader
-from amazon_scraper.utils import async_retry
+
 from amazon_scraper.core.browser_manager import BrowserManager
+from amazon_scraper.utils.utils import async_retry
 
 
 class AmazonScraper:
