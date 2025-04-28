@@ -2,7 +2,7 @@
 
 import asyncio
 from amazon_scraper import AmazonScraper
-from amazon_scraper.utils.selector_loader import SelectorLoader
+from amazon_scraper.selectors.selector_loader import SelectorLoader
 from loguru import logger
 
 async def main():

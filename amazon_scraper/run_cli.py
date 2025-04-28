@@ -1,10 +1,21 @@
-# amazon_scraper/run_cli.py
+import asyncio
 from amazon_scraper.services.scraper_service import ScraperService
 from amazon_scraper.core.browser_manager import BrowserManager
-from amazon_scraper.utils.selector_loader import SelectorLoader
+from amazon_scraper.selectors.selector_loader import SelectorLoader
+
+async def run_cli():
+    selectors = SelectorLoader.load_selectors()
+    browser_manager = BrowserManager()
+    await browser_manager.start_browser(headless=False)
+
+    scraper_service = ScraperService(browser_manager)
+    query = selectors.get("query", "ssd")
+    products = await scraper_service.scrape_products(query)
+
+    for product in products:
+        print(product.model_dump())
+
+    await browser_manager.close_browser()
 
 if __name__ == "__main__":
-    scraper_service = ScraperService(BrowserManager(), SelectorLoader())
-    products = scraper_service.scrape_products("ssd")
-    for product in products:
-        print(product)
+    asyncio.run(run_cli())

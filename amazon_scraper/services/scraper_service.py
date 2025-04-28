@@ -1,9 +1,11 @@
-# amazon_scraper/services/scraper_service.py
 from amazon_scraper.scraper import AmazonScraper
+from amazon_scraper.selectors.selector_loader import SelectorLoader
 
 class ScraperService:
-    def __init__(self, browser_manager, selectors_loader):
-        self.scraper = AmazonScraper(browser_manager, selectors_loader)
+    def __init__(self, browser_manager):
+        selectors = SelectorLoader.load_selectors()
+        self.scraper = AmazonScraper(browser_manager, selectors)
 
-    def scrape_products(self, query: str):
-        return self.scraper.scrape(query)
+    async def scrape_products(self, query: str):
+        products = await self.scraper.scrape(query)
+        return products

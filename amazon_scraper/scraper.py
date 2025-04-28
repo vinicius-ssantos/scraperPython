@@ -8,16 +8,17 @@ from typing import List, Optional
 from loguru import logger
 
 from amazon_scraper.models.product import Product
-from amazon_scraper.utils.selector_loader import SelectorLoader
+from amazon_scraper.selectors.selector_loader import SelectorLoader
 
 from amazon_scraper.core.browser_manager import BrowserManager
 from amazon_scraper.utils.utils import async_retry
 
 
 class AmazonScraper:
-    def __init__(self, browser_manager: Optional[BrowserManager] = None):
+    def __init__(self, browser_manager: Optional[BrowserManager] = None, selectors: Optional[dict] = None):
         self.browser_manager = browser_manager or BrowserManager()
-        self.selectors = SelectorLoader.load_selectors()
+        self.selectors = selectors or SelectorLoader.load_selectors()
+
 
     async def init_browser(self):
         await self.browser_manager.start_browser(headless=False)
