@@ -31,3 +31,5 @@ delivery:
 
 badge:
   - "span.puis-label-popover-default span.a-color-secondary"
+
+query: "ssd"
