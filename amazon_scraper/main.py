@@ -2,11 +2,15 @@
 
 import asyncio
 from amazon_scraper import AmazonScraper
+from amazon_scraper.selector_loader import SelectorLoader
 from loguru import logger
 
 async def main():
-    query = "ssd"
+    selectors = SelectorLoader.load_selectors()
+    query = selectors.get("query", "ssd")  # busca a palavra-chave, fallback para "ssd"
+
     scraper = AmazonScraper()
+    await scraper.init_browser()
     products = await scraper.scrape(query)
 
     for product in products:
