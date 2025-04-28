@@ -7,10 +7,11 @@ from typing import List, Optional
 
 from loguru import logger
 
-from model import Product
-from selector_loader import SelectorLoader
-from utils import async_retry
-from core.browser_manager import BrowserManager
+from amazon_scraper.model import Product
+from amazon_scraper.selector_loader import SelectorLoader
+from amazon_scraper.utils import async_retry
+from amazon_scraper.core.browser_manager import BrowserManager
+
 
 class AmazonScraper:
     def __init__(self, browser_manager: Optional[BrowserManager] = None):
