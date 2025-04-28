@@ -2,3 +2,5 @@ playwright
 loguru
 pydantic
 pyyaml
+fastapi
+uvicorn

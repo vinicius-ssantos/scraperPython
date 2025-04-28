@@ -1,7 +1,7 @@
 # amazon_scraper/main.py
 
 import asyncio
-from scraper import AmazonScraper
+from amazon_scraper import AmazonScraper
 from loguru import logger
 
 async def main():

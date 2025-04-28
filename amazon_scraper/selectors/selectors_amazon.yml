@@ -1,5 +1,12 @@
+# selectors_amazon.yml
+
+search_url_template: "https://www.amazon.com.br/s?k={query}"
+
 product_block:
   - "div.s-result-item[data-asin]:not([data-asin=''])"
+
+wait_for_products_function: |
+  () => document.querySelectorAll("div[data-component-type='s-search-result']").length > 5
 
 title:
   - "h2.a-size-base-plus.a-spacing-none.a-color-base.a-text-normal span"
@@ -11,7 +18,7 @@ rating:
   - "span.a-icon-alt"
 
 reviews:
-  - "a.a-link-normal.s-underline-text.s-link-style"
+  - "a.a-link-normal.s-underline-text span"
 
 link:
   - "a.a-link-normal.s-line-clamp-4.s-link-style.a-text-normal"

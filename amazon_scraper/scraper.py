@@ -1,125 +1,100 @@
-# amazon_scraper/scraper.py
+# scraper.py (refatorado para usar BrowserManager)
 
 import json
 import os
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from loguru import logger
-from playwright.async_api import async_playwright, Browser, Page
 
 from model import Product
 from selector_loader import SelectorLoader
 from utils import async_retry
+from core.browser_manager import BrowserManager
 
 class AmazonScraper:
-    def __init__(self):
-        self.playwright = None
-        self.browser: Optional[Browser] = None
-        self.page: Optional[Page] = None
+    def __init__(self, browser_manager: Optional[BrowserManager] = None):
+        self.browser_manager = browser_manager or BrowserManager()
         self.selectors = SelectorLoader.load_selectors()
 
     async def init_browser(self):
-        self.playwright = await async_playwright().start()
-        self.browser = await self.playwright.chromium.launch(headless=False)
-        self.page = await self.browser.new_page()
+        await self.browser_manager.start_browser(headless=False)
 
     async def close(self):
-        if self.browser:
-            await self.browser.close()
-        if self.playwright:
-            await self.playwright.stop()
+        await self.browser_manager.close_browser()
 
     @async_retry(retries=3, delay=2)
-    async def scrape(self, query: str) -> list[Product]:
-        if not self.browser:
-            await self.init_browser()
-
-        search_url = f"https://www.amazon.com.br/s?k={query}"
+    async def scrape(self, query: str) -> List[Product]:
+        page = self.browser_manager.get_page()
+        search_url = self.selectors['search_url_template'].format(query=query)
         logger.info(f"Navigating to {search_url}")
-        await self.page.goto(search_url, timeout=60000)
 
-        # Gera timestamp único
+        await page.goto(search_url, timeout=60000)
+
+        os.makedirs("output/screenshots", exist_ok=True)
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        await page.screenshot(path=f"output/screenshots/screenshot_{query}_{timestamp}.png", full_page=True)
 
-        # Cria pasta para a execução
-        output_dir = os.path.join("output", f"{query}_{timestamp}")
-        os.makedirs(output_dir, exist_ok=True)
-
-        # Screenshot
-        screenshot_path = os.path.join(output_dir, "screenshot.png")
-        await self.page.screenshot(path=screenshot_path, full_page=True)
-        logger.info(f"Saved screenshot to {screenshot_path}")
-
-        # HTML da página
-        html_content = await self.page.content()
-        html_file_path = os.path.join(output_dir, "page_source.html")
-        with open(html_file_path, "w", encoding="utf-8") as f:
+        html_content = await page.content()
+        with open(f"output/page_source_{query}_{timestamp}.html", "w", encoding="utf-8") as f:
             f.write(html_content)
-        logger.info(f"Saved page HTML to {html_file_path}")
+        logger.info(f"Saved page HTML to output/page_source_{query}_{timestamp}.html")
 
-        # Espera produtos renderizarem
-        await self.page.wait_for_function(
-            """() => document.querySelectorAll("div.s-result-item[data-asin]:not([data-asin=''])").length > 20""",
-            timeout=30000
-        )
+        await page.wait_for_selector(self.selectors['product_block'][0], timeout=30000)
+        await page.wait_for_function(self.selectors['wait_for_products_function'], timeout=30000)
+
 
         products = []
-        product_elements = await self.page.query_selector_all(self.selectors['product_block'][0])
+        product_elements = await page.query_selector_all(self.selectors['product_block'][0])
 
         for element in product_elements:
             title = await self.extract_text(element, self.selectors['title'])
             price = await self.extract_text(element, self.selectors['price'])
             rating = await self.extract_text(element, self.selectors['rating'])
             reviews = await self.extract_text(element, self.selectors['reviews'])
-
-            link_element = await element.query_selector(self.selectors['link'][0])
-            image_element = await element.query_selector(self.selectors['image_url'][0])
+            link = await self.extract_attribute(element, self.selectors['link'], "href")
+            image_url = await self.extract_attribute(element, self.selectors['image_url'], "src")
             delivery = await self.extract_text(element, self.selectors['delivery'])
             badge = await self.extract_text(element, self.selectors['badge'])
 
-            link = await link_element.get_attribute('href') if link_element else None
-            image_url = await image_element.get_attribute('src') if image_element else None
-            asin = await element.get_attribute('data-asin')
-
             if title:
                 products.append(Product(
-                    title=title,
-                    price=price,
-                    rating=rating,
-                    reviews=reviews,
-                    link=link,
-                    image_url=image_url,
-                    delivery=delivery,
-                    badge=badge,
-                    asin=asin
+                    title=title, price=price, rating=rating, reviews=reviews,
+                    link=link, image_url=image_url, delivery=delivery, badge=badge
                 ))
 
         logger.info(f"Scraped {len(products)} products.")
 
         if products:
-            products_file = os.path.join(output_dir, "products.json")
-            with open(products_file, "w", encoding="utf-8") as f:
+            output_file = f"output/products_{query}_{timestamp}.json"
+            with open(output_file, "w", encoding="utf-8") as f:
                 json.dump([product.model_dump() for product in products], f, ensure_ascii=False, indent=2)
-            logger.info(f"Saved products to {products_file}")
+            logger.info(f"Saved products to {output_file}")
 
         return products
 
     @staticmethod
-    async def extract_text(element, selectors: list[str]) -> str | None:
+    async def extract_text(element, selectors: List[str]) -> Optional[str]:
         for selector in selectors:
             try:
                 sub_element = await element.query_selector(selector)
                 if sub_element:
-                    # Primeiro tenta pegar inner_text (ideal para <span>, <div> etc.)
                     text = await sub_element.inner_text()
                     if text:
                         return text.strip()
-                    # Se inner_text vazio, tenta pegar diretamente o atributo 'textContent'
-                    text_content = await sub_element.get_attribute("textContent")
-                    if text_content:
-                        return text_content.strip()
             except Exception as e:
                 logger.warning(f"Failed to extract with selector {selector}: {e}")
         return None
 
+    @staticmethod
+    async def extract_attribute(element, selectors: List[str], attribute: str) -> Optional[str]:
+        for selector in selectors:
+            try:
+                sub_element = await element.query_selector(selector)
+                if sub_element:
+                    attr_value = await sub_element.get_attribute(attribute)
+                    if attr_value:
+                        return attr_value.strip()
+            except Exception as e:
+                logger.warning(f"Failed to extract attribute {attribute} with selector {selector}: {e}")
+        return None

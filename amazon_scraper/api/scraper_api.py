@@ -1,9 +1,10 @@
+# api/scraper_api.py
+
 from fastapi import FastAPI, Query, HTTPException
-from scraper import AmazonScraper
-from model import Product
+from ..scraper import AmazonScraper
+from ..model import Product
 from typing import List
 from loguru import logger
-import asyncio
 
 app = FastAPI(title="Amazon Scraper API", version="1.0.0")
 
