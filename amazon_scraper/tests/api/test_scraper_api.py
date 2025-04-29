@@ -6,18 +6,24 @@ from amazon_scraper.models.product import Product
 
 class DummyService:
     async def scrape(self, query):
+        # Retorna um produto dummy para teste
         return [Product(title="T", price="P")]
 
 @pytest.fixture(autouse=True)
-def override_service(monkeypatch):
-    async def _get():
+def override_dependency():
+    # Substitui a dependência get_scraper_service pelo stub
+    async def get_dummy_service():
         yield DummyService()
-    monkeypatch.setattr("amazon_scraper.api.router.get_scraper_service", _get)
+    app.dependency_overrides[get_scraper_service] = get_dummy_service
+    yield
+    # Limpa overrides após o teste
+    app.dependency_overrides.clear()
 
 def test_scrape_endpoint():
     client = TestClient(app)
-    r = client.get("/api/scrape?query=foo")
-    assert r.status_code == 200
-    body = r.json()
+    response = client.get("/api/scrape?query=foo")
+    assert response.status_code == 200
+    body = response.json()
     assert "products" in body
+    assert isinstance(body["products"], list)
     assert body["products"][0]["title"] == "T"
