@@ -1,6 +1,8 @@
-playwright
-loguru
-pydantic
-pyyaml
-fastapi
-uvicorn
+playwright~=1.51.0
+loguru~=0.7.3
+pydantic~=2.11.3
+pyyaml~=6.0.2
+fastapi~=0.115.12
+uvicorn~=0.34.2
+
+pytest~=8.3.5
